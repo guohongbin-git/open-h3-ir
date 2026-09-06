@@ -1848,6 +1848,43 @@ def validate(text: str, ctx: Context | None = None, **kw) -> list[Finding]:
                     f"LoRA trigger {want_text!r} is present but not in the style slot "
                     f"({'style line before [Shot 1]' if is_ref else '[Shot 1] style prefix'})")
 
+
+    # --------------------------------------------------------------- section language (ref-en line 5)
+    CJK_RE = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf]')
+    DIALOGUE_BLOCK_RE = re.compile(r'<d>\[[^\]]+\].*?</d>', re.S)
+    QUOTED_VISIBLE_RE = re.compile(r'[\u201c"][^\u201c"]*[\u201d"]')
+
+    body_for_lang = DIALOGUE_BLOCK_RE.sub("", text)
+    body_for_lang = QUOTED_VISIBLE_RE.sub("", body_for_lang)
+    cjk_hits = CJK_RE.findall(body_for_lang)
+    if cjk_hits:
+        add("L1-cjk-outside-dialogue", "ERROR",
+            f"non-<d> sections contain CJK characters {cjk_hits[:6]}. ref-en.txt line 5: "
+            "write all sections in English; preserve the original language only for "
+            "dialogue inside <d> and text visibly present in the scene.")
+
+    # --------------------------------------------------------------- voice refs in soundscape
+    sound_sec = sec.get("overall_soundscape", "")
+    if sound_ctx := sound_sec.strip():
+        voice_refs = re.findall(
+            r'\b(?:voice|speak\w*|says|dialogue|whisper\w*|shout\w*|narrat\w+)\b',
+            sound_ctx, re.I)
+        if voice_refs:
+            add("A8-soundscape-mentions-voice", "WARN",
+                f"overall_soundscape mentions {voice_refs[:3]}; dialogue and speech "
+                "belong in detailed_description, not soundscape (base-en.txt §4.6)")
+
+    # --------------------------------------------------------------- negation-heavy style
+    desc_raw = sec.get("detailed_description", "")
+    shot1_pos = desc_raw.find("[Shot 1]")
+    style_part = desc_raw[:shot1_pos].strip() if shot1_pos > 0 else ""
+    if style_part:
+        negs = re.findall(r'\bno\s+\w+', style_part, re.I)
+        if len(negs) > 2:
+            add("P6-style-negation-heavy", "WARN",
+                f"style opening contains {len(negs)} negation phrases {negs[:5]}; "
+                "prefer positive descriptions over 'no X' lists")
+
     return f
 
 
