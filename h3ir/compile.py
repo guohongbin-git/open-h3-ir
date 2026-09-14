@@ -379,12 +379,6 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
             raise CompilerInvariantError(
                 "the deterministic draft failed its own validator: "
                 + "; ".join(str(f) for f in draft_errors[:4]))
-        if not llm:
-            # Arm 0: the deterministic draft IS the deliverable. Rendered above with the
-            # caller's action anchors injected; no prose model ever runs.
-            return _document(draft_plan, draft_result, draft_findings, draft_tokens,
-                             "draft", "the caller asked for the draft only",
-                             action_trace=action_trace)
 
         # Filled by the planning stage; read by _document, which is defined before it runs.
         shot_plan_record: dict[str, Any] = {}
@@ -428,6 +422,13 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
                     "timings": timings,
                     "clarification": needs_clarification(decision),
                 })
+
+        if not llm:
+            # Arm 0: the deterministic draft IS the deliverable. Rendered above with the
+            # caller's action anchors injected; no prose model ever runs.
+            return _document(draft_plan, draft_result, draft_findings, draft_tokens,
+                             "draft", "the caller asked for the draft only",
+                             action_trace=action_trace)
 
 
         # --- write first, verify second --------------------------------------------------
