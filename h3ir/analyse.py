@@ -165,7 +165,7 @@ def load_cached(ref: AssetRef, model: str) -> AssetCard | None:
     if not p.exists():
         return None
     try:
-        raw = json.loads(p.read_text())
+        raw = json.loads(p.read_text(encoding="utf-8"))
         raw["kind"] = AssetKind(raw["kind"])
         return AssetCard(**raw)
     except Exception:  # noqa: BLE001 - a bad cache entry is not an error, just a miss
@@ -176,7 +176,7 @@ def save_cached(ref: AssetRef, card: AssetCard, model: str) -> None:
     from dataclasses import asdict
     d = asdict(card)
     d["kind"] = card.kind.value
-    _cache_path(_cache_key(ref, model)).write_text(json.dumps(d, indent=1, ensure_ascii=False))
+    _cache_path(_cache_key(ref, model)).write_text(json.dumps(d, indent=1, ensure_ascii=False), encoding="utf-8")
 
 
 def analyse_image(backend: Backend, ref: AssetRef, *, seed: int | None = None) -> AssetCard:
