@@ -80,12 +80,11 @@ def inject(plan, anchors_raw: list[dict[str, Any]],
         # scene_text (dd prose) rides before the anchor sentences: the caller's staging is
         # authoritative, so the body carries it verbatim instead of "the scene described by
         # the request" — the draft template drops dd semantics otherwise.
-        parts = ([lead] if lead else [])
+        parts = []
         if idx == 0 and scene_text:
             parts.append(scene_text.strip())
         parts.append(render_sentences(group))
         shot.body = " ".join(parts)
-        shot.body = lead + render_sentences(group)
         for a in group:
             spans.append({"anchor_id": a["anchor_id"], "spec_frame": a["spec_frame"],
                           "compiled_frame": a["spec_frame"],
