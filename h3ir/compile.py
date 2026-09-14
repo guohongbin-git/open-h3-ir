@@ -361,6 +361,13 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
         check_swap(brief, draft_plan)
         _inject_lora_triggers(draft_plan, opts)
         sheet_flags = tuple(c.is_reference_sheet for c in cards.values())
+        action_trace: list[dict[str, Any]] = []
+        if not llm and action_anchors:
+            # Deterministic injection BEFORE the render: intra-shot action anchors are
+            # the caller's first-class structured facts, so Python writes their
+            # At-timestamp sentences and the prose stage never sees them.
+            from .anchors import inject
+            action_trace = inject(draft_plan, action_anchors)
         draft_result, draft_findings, draft_tokens = _assess(
             draft_plan, brief, mode, opts, lora_findings, sheet_flags, licence, style,
             audio_transcripts=_audio_transcripts(draft_plan, cards))
@@ -416,17 +423,6 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
                     "clarification": needs_clarification(decision),
                 })
 
-        action_trace: list[dict[str, Any]] = []
-        if not llm:
-            # Deterministic injection BEFORE validation: intra-shot action anchors are
-            # the caller's first-class structured facts, so Python writes their
-            # At-timestamp sentences and the prose stage never sees them.
-            if action_anchors:
-                from .anchors import inject
-                action_trace = inject(draft_plan, action_anchors)
-            return _document(draft_plan, draft_result, draft_findings, draft_tokens,
-                             "draft", "the caller asked for the draft only",
-                             action_trace=action_trace)
 
         # --- write first, verify second --------------------------------------------------
         # The inversion. Two composed architectures produced structurally identical output while
