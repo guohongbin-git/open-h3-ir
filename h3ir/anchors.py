@@ -5,6 +5,7 @@
 - 锚点是调用方的一等结构字段，不是 prose：Python 机械生成句子，模型永不触碰。
 - 时间一律以帧为准（spec_frame），canonical_time = frame/24 只是显示值。
 - 注入后 shot.body = 锚点句序列（完全确定），draft 的 beat 文本被替换。
+- 第一镜头部垫无时间引导句（validator T2：[Shot 1] 头不许带时间戳）。
 - sidecar（anchor trace）记录 spec_frame / compiled_span / preservation，供门验证。
 """
 from __future__ import annotations
@@ -57,12 +58,9 @@ def inject(plan, anchors_raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not anchors or not plan.shots:
         return []
     spans: list[dict[str, Any]] = []
-    bounds = []  # 每个 shot 的帧窗 [start,end)
-    # 单镜直接全量；多镜按 draft 切点均分（标定题恒单镜，此分支留作结构完整）
     n = len(plan.shots)
     total = max(a["spec_frame"] for a in anchors) + 1
-    for i in range(n):
-        bounds.append((i * total // n, (i + 1) * total // n))
+    bounds = [(i * total // n, (i + 1) * total // n) for i in range(n)]
     grouped: dict[int, list[dict[str, Any]]] = {}
     for a in anchors:
         idx = n - 1 if a["spec_frame"] >= bounds[-1][1] else next(
@@ -70,13 +68,16 @@ def inject(plan, anchors_raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
         grouped.setdefault(idx, []).append(a)
     for idx, shot in enumerate(plan.shots):
         group = grouped.get(idx)
-        if group:
-            shot.body = render_sentences(group)
-            for a in group:
-                spans.append({"anchor_id": a["anchor_id"], "spec_frame": a["spec_frame"],
-                              "compiled_frame": a["spec_frame"],
-                              "shot": idx + 1,
-                              "prompt_span": f"At {_ts(a['spec_frame'])}, "
-                                             f"<Subject {a['subject']}> {a['event']}.",
-                              "preservation": "exact"})
+        if not group:
+            continue
+        lead = ("The clip is a single continuous take of the scene described by the request. "
+                if idx == 0 else "")
+        shot.body = lead + render_sentences(group)
+        for a in group:
+            spans.append({"anchor_id": a["anchor_id"], "spec_frame": a["spec_frame"],
+                          "compiled_frame": a["spec_frame"],
+                          "shot": idx + 1,
+                          "prompt_span": f"At {_ts(a['spec_frame'])}, "
+                                         f"<Subject {a['subject']}> {a['event']}.",
+                          "preservation": "exact"})
     return spans
