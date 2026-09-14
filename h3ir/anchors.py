@@ -51,12 +51,19 @@ def render_sentences(anchors: list[dict[str, Any]]) -> str:
     return " ".join(parts)
 
 
-def inject(plan, anchors_raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def inject(plan, anchors_raw: list[dict[str, Any]],
+         scene_text: str | None = None) -> list[dict[str, Any]]:
     """把锚点注进 draft plan：单镜 = 全部注入 shot 1；多镜按帧窗落入对应 shot。
     返回 anchor trace（sidecar 数据）。"""
-    anchors = normalise(anchors_raw)
-    if not anchors or not plan.shots:
+    anchors = normalise(anchors_raw) if anchors_raw else []
+    if not plan.shots:
         return []
+    if not anchors and scene_text and plan.shots:
+        plan.shots[0].body = ("The clip is a single continuous take of the scene described "
+                              "below. " + scene_text.strip())
+        return [{"anchor_id": "SCENE", "spec_frame": 0, "compiled_frame": 0,
+                 "shot": 1, "prompt_span": scene_text.strip()[:80],
+                 "preservation": "SEMANTIC"}]
     spans: list[dict[str, Any]] = []
     n = len(plan.shots)
     total = max(a["spec_frame"] for a in anchors) + 1
@@ -70,8 +77,14 @@ def inject(plan, anchors_raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
         group = grouped.get(idx)
         if not group:
             continue
-        lead = ("The clip is a single continuous take of the scene described by the request. "
-                if idx == 0 else "")
+        # scene_text (dd prose) rides before the anchor sentences: the caller's staging is
+        # authoritative, so the body carries it verbatim instead of "the scene described by
+        # the request" — the draft template drops dd semantics otherwise.
+        parts = ([lead] if lead else [])
+        if idx == 0 and scene_text:
+            parts.append(scene_text.strip())
+        parts.append(render_sentences(group))
+        shot.body = " ".join(parts)
         shot.body = lead + render_sentences(group)
         for a in group:
             spans.append({"anchor_id": a["anchor_id"], "spec_frame": a["spec_frame"],

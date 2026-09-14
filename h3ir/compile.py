@@ -255,7 +255,8 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
                   prose_prompt: str = "prose_shot.v2.txt",
                   omit: tuple[str, ...] = (),
                   transcripts: dict[str, str] | None = None,
-                  action_anchors: list[dict[str, Any]] | None = None) -> IRDocument:
+                  action_anchors: list[dict[str, Any]] | None = None,
+                  scene_text: str | None = None) -> IRDocument:
     cfg = get_config()
     opts = opts or ProfileOptions(name=cfg.profile)
     own_backend = backend is None
@@ -362,12 +363,12 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
         _inject_lora_triggers(draft_plan, opts)
         sheet_flags = tuple(c.is_reference_sheet for c in cards.values())
         action_trace: list[dict[str, Any]] = []
-        if not llm and action_anchors:
-            # Deterministic injection BEFORE the render: intra-shot action anchors are
-            # the caller's first-class structured facts, so Python writes their
-            # At-timestamp sentences and the prose stage never sees them.
+        if not llm and (action_anchors or scene_text):
+            # Deterministic injection BEFORE the render: intra-shot action anchors and the
+            # caller's dd staging are first-class structured facts, so Python writes them
+            # into the shot body and the prose stage never sees them.
             from .anchors import inject
-            action_trace = inject(draft_plan, action_anchors)
+            action_trace = inject(draft_plan, action_anchors, scene_text=scene_text)
         draft_result, draft_findings, draft_tokens = _assess(
             draft_plan, brief, mode, opts, lora_findings, sheet_flags, licence, style,
             audio_transcripts=_audio_transcripts(draft_plan, cards))

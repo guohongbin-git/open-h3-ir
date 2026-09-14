@@ -175,6 +175,12 @@ class BriefIn(BaseModel):
                     "seconds:float}. Python writes their At-timestamp sentences "
                     "deterministically; the prose model never touches them. Times quantise to "
                     "the nearest frame; the frame is the truth, the timestamp is display.")
+    scene_text: str | None = Field(
+        None,
+        description="The caller's dd staging prose, injected verbatim into the shot body "
+                    "on the draft_only path (frame-truth anchors and dd semantics ride "
+                    "into the render even though the draft template does not restate "
+                    "the request).")
     transcripts: dict[str, str] = Field(
         default_factory=dict,
         description="sha256 -> transcript, for attached audio. This service NEVER transcribes: "
@@ -668,7 +674,8 @@ def create_brief(body: BriefIn) -> JSONResponse:
                             llm=(body.compile_mode != "draft_only"),
                             thinking_prose=(body.effort == "max"),
                             transcripts=dict(body.transcripts),
-                            action_anchors=body.action_anchors)
+                            action_anchors=body.action_anchors,
+                            scene_text=body.scene_text)
     except BriefRefused as e:
         # Every refusal this layer makes about the request itself, with the code it carries. The
         # capacity one is design.md 12's, and 422 rather than a silently truncated manifest: which

@@ -97,7 +97,7 @@ ASSET_FIELDS: tuple[str, ...] = (
 BRIEF_FIELDS: tuple[str, ...] = (
     "intent", "assets", "seconds", "aspect", "megapixels", "dialogue", "onscreen_text", "shots",
     "loras", "silent", "constraints", "creativity", "director", "director_profile", "effort",
-    "seed", "transcripts", "answer", "compile_mode", "mode", "action_anchors",
+    "seed", "transcripts", "answer", "compile_mode", "mode", "action_anchors", "scene_text",
 )
 
 # Every key of one dialogue line, which is `service.DialogueIn`'s field list.
