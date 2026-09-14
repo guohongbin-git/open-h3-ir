@@ -275,7 +275,12 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
         # (the row cost and the aspect check are computed from them) and a declared kind that does
         # not match the bytes.
         measure_assets(brief.assets)
-        backend.require_available()
+        # draft_only is the deterministic product floor: it must compile with the prose model
+        # OFF (frozen asset cards + locked mode), so health is only mandatory when the prose
+        # pass will actually run. A cold card cache with the model down still fails honestly
+        # inside analyse_all.
+        if llm:
+            backend.require_available()
 
         t = time.time()
         cards: dict[str, AssetCard] = analyse_all(

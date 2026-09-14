@@ -157,6 +157,17 @@ class BriefIn(BaseModel):
                     "one. Say habits, not shots.")
     effort: Literal["fast", "standard", "max"] = "standard"
     seed: int | None = 7
+    compile_mode: Literal["draft_only", "enriched_required"] = Field(
+        "enriched_required",
+        description="draft_only = the deterministic draft is the deliverable (no prose model "
+                    "call; zero prose variance; the benchmark path). enriched_required = the "
+                    "prose pass runs and must succeed; a fallback to draft is reported, never "
+                    "counted as success.")
+    mode: Literal["ref2va", "fl2va", "t2va"] | None = Field(
+        None,
+        description="Caller override of the task mode. Locks the mode deterministically "
+                    "(caller-override path, no model involved) — required for benchmark "
+                    "compiles where the mode must never be inferred.")
     transcripts: dict[str, str] = Field(
         default_factory=dict,
         description="sha256 -> transcript, for attached audio. This service NEVER transcribes: "
@@ -313,11 +324,6 @@ def _to_brief(b: BriefIn) -> Brief:
                     "message": f"no such file: {a.paired_video_path} (given as the video this "
                                "soundtrack is paired with)"})
             paired = sha256_file(paired_path)
-        assets.append(AssetRef(kind=AssetKind(a.kind), role=role, sha256=sha,
-                               path=str(p), note=a.note, sizing=a.sizing, seconds=a.seconds,
-                               frames=a.frames, provenance=a.provenance,
-                               paired_video_sha256=paired, role_stated=stated,
-                               replaces=(a.replaces or "").strip()))
 
     # An answered clarification becomes an explicit role, which is exactly how it would have
     # arrived had the caller known: the answer is data, not a special code path.
@@ -326,6 +332,7 @@ def _to_brief(b: BriefIn) -> Brief:
 
     return Brief(intent=b.intent, assets=assets, seconds=b.seconds, aspect=b.aspect,
                  megapixels=b.megapixels,
+                 mode=Mode(b.mode) if b.mode else None,
                  dialogue=[DialogueLine(text=d.text, language=d.language,
                                         speaker_hint=d.speaker, voiceover=d.voiceover)
                            for d in b.dialogue],
@@ -643,6 +650,7 @@ def create_brief(body: BriefIn) -> JSONResponse:
     opts = ProfileOptions(name=get_config().profile)
     try:
         doc = compile_brief(brief, opts=opts, seed=body.seed,
+                            llm=(body.compile_mode != "draft_only"),
                             thinking_prose=(body.effort == "max"),
                             transcripts=dict(body.transcripts))
     except BriefRefused as e:
