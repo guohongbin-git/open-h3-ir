@@ -254,7 +254,8 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
                   compose_prompt: str | None = None,
                   prose_prompt: str = "prose_shot.v2.txt",
                   omit: tuple[str, ...] = (),
-                  transcripts: dict[str, str] | None = None) -> IRDocument:
+                  transcripts: dict[str, str] | None = None,
+                  action_anchors: list[dict[str, Any]] | None = None) -> IRDocument:
     cfg = get_config()
     opts = opts or ProfileOptions(name=cfg.profile)
     own_backend = backend is None
@@ -375,7 +376,8 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
         # Filled by the planning stage; read by _document, which is defined before it runs.
         shot_plan_record: dict[str, Any] = {}
 
-        def _document(plan, result, findings, n_tokens, source, reason=None) -> IRDocument:
+        def _document(plan, result, findings, n_tokens, source, reason=None,
+                      action_trace=None) -> IRDocument:
             return IRDocument(
                 ir_version=IR_VERSION, profile=opts.name, mode=mode,
                 prompt=result.prompt, plan=plan, sections=result.sections,
@@ -386,6 +388,9 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
                     "prose_model": backend.cfg.model if source == "enriched" else None,
                     "source": source,
                     "fallback_reason": reason,
+                    "requested_compile_mode": "draft_only" if not llm else "enriched_required",
+                    "prose_attempted": bool(llm),
+                    "action_anchor_trace": action_trace or None,
                     "seed": seed,
                     # What the dial decided, in the record. Proportionality is now part of the bar
                     # the output is judged against, so the setting and its consequences have to be
@@ -411,9 +416,17 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
                     "clarification": needs_clarification(decision),
                 })
 
+        action_trace: list[dict[str, Any]] = []
         if not llm:
+            # Deterministic injection BEFORE validation: intra-shot action anchors are
+            # the caller's first-class structured facts, so Python writes their
+            # At-timestamp sentences and the prose stage never sees them.
+            if action_anchors:
+                from .anchors import inject
+                action_trace = inject(draft_plan, action_anchors)
             return _document(draft_plan, draft_result, draft_findings, draft_tokens,
-                             "draft", "the caller asked for the draft only")
+                             "draft", "the caller asked for the draft only",
+                             action_trace=action_trace)
 
         # --- write first, verify second --------------------------------------------------
         # The inversion. Two composed architectures produced structurally identical output while

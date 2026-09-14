@@ -168,6 +168,13 @@ class BriefIn(BaseModel):
         description="Caller override of the task mode. Locks the mode deterministically "
                     "(caller-override path, no model involved) — required for benchmark "
                     "compiles where the mode must never be inferred.")
+    action_anchors: list[dict[str, Any]] | None = Field(
+        None,
+        description="Intra-shot action anchors as first-class structured facts (draft_only "
+                    "path). Each: {anchor_id?, subject:int, event:str, frame:int | "
+                    "seconds:float}. Python writes their At-timestamp sentences "
+                    "deterministically; the prose model never touches them. Times quantise to "
+                    "the nearest frame; the frame is the truth, the timestamp is display.")
     transcripts: dict[str, str] = Field(
         default_factory=dict,
         description="sha256 -> transcript, for attached audio. This service NEVER transcribes: "
@@ -324,6 +331,11 @@ def _to_brief(b: BriefIn) -> Brief:
                     "message": f"no such file: {a.paired_video_path} (given as the video this "
                                "soundtrack is paired with)"})
             paired = sha256_file(paired_path)
+        assets.append(AssetRef(kind=AssetKind(a.kind), role=role, sha256=sha,
+                               path=str(p), note=a.note, sizing=a.sizing, seconds=a.seconds,
+                               frames=a.frames, provenance=a.provenance,
+                               paired_video_sha256=paired, role_stated=stated,
+                               replaces=(a.replaces or "").strip()))
 
     # An answered clarification becomes an explicit role, which is exactly how it would have
     # arrived had the caller known: the answer is data, not a special code path.
@@ -393,7 +405,10 @@ def _envelope(brief_id: str, doc: IRDocument, brief: Brief) -> dict[str, Any]:
     clar = doc.provenance.get("clarification")
     return {
         "id": brief_id,
-        "status": ("needs_input" if clar else ("degraded" if doc.fell_back else "ready")),
+        "status": ("needs_input" if clar else
+                   ("degraded" if (doc.fell_back and
+                                   doc.provenance.get("requested_compile_mode") != "draft_only")
+                    else "ready")),
         "source": doc.source,
         "fallback_reason": doc.fallback_reason,
         "question": clar,
@@ -652,7 +667,8 @@ def create_brief(body: BriefIn) -> JSONResponse:
         doc = compile_brief(brief, opts=opts, seed=body.seed,
                             llm=(body.compile_mode != "draft_only"),
                             thinking_prose=(body.effort == "max"),
-                            transcripts=dict(body.transcripts))
+                            transcripts=dict(body.transcripts),
+                            action_anchors=body.action_anchors)
     except BriefRefused as e:
         # Every refusal this layer makes about the request itself, with the code it carries. The
         # capacity one is design.md 12's, and 422 rather than a silently truncated manifest: which
