@@ -380,15 +380,23 @@ def _fill_shot_body(shot, plan: Plan, opts: ProfileOptions, notes: list[str]) ->
                          f"({head!r}); the prose described it without the label")
 
     used: set[int] = set()
+
+    def _speaker_for(line):
+        # The hint match is the binding; fallback only when no speaker_hint was given.
+        # (append path previously forced speakers[0] for every token the prose dropped,
+        # silently making BOTH lines share one speaker — control-plane overreach.)
+        hint = line.speaker_hint or ""
+        if hint:
+            sp = next((s for s in plan.speakers if (s.descriptor or "") == hint), None)
+            if sp:
+                return sp
+        return plan.speakers[0] if plan.speakers else None
+
     def _sub(m: re.Match) -> str:
         i = int(m.group(1))
         used.add(i)
         if 1 <= i <= len(shot.dialogue):
-            line = shot.dialogue[i - 1]
-            sp = next((s for s in plan.speakers
-                       if (line.speaker_hint or "") == (s.descriptor or "")), None) \
-                or (plan.speakers[0] if plan.speakers else None)
-            return dialogue_markup(line, sp)
+            return dialogue_markup(shot.dialogue[i - 1], _speaker_for(shot.dialogue[i - 1]))
         return ""
 
     body = DLG_TOKEN.sub(_sub, body)
@@ -396,7 +404,7 @@ def _fill_shot_body(shot, plan: Plan, opts: ProfileOptions, notes: list[str]) ->
     for i in missing:
         notes.append(f"shot {shot.n}: dialogue token {{{{D{i}}}}} missing from prose, appended")
         line = shot.dialogue[i - 1]
-        sp = plan.speakers[0] if plan.speakers else None
+        sp = _speaker_for(line)
         body = body.rstrip()
         if body and not body.endswith((".", "!", "?")):
             body += "."
