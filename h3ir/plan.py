@@ -488,8 +488,15 @@ def build_speakers(brief: Brief, subjects: list[SubjectPlan],
         if key in seen:
             continue
         sid = f"(S{len(out) + 1})"
-        subj = people[len(out)].label if len(out) < len(people) else (
-            people[0].label if people else None)
+        # Caller-owned subject binding (director doctrine, cf. camera_phrase): an explicit
+        # 1-based speaker_subject binds the line to that <Subject N>; absent it, keep the
+        # positional behavior. Without this a single dialogue line can never move off
+        # people[0], which made two-person speaker tests structurally contradictory.
+        if line.speaker_subject and 1 <= line.speaker_subject <= len(people):
+            subj = people[line.speaker_subject - 1].label
+        else:
+            subj = people[len(out)].label if len(out) < len(people) else (
+                people[0].label if people else None)
         sp = SpeakerPlan(sid=sid, subject=subj,
                          voice_ref=voice_refs[0] if voice_refs else None,
                          onscreen=not line.voiceover,

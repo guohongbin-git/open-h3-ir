@@ -187,6 +187,7 @@ class DialogueLine:
     language: str = "English"
     speaker_hint: str | None = None
     voiceover: bool = False
+    speaker_subject: int | None = None   # 1-based <Subject N>; caller-owned binding
 
 
 @dataclass

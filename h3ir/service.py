@@ -99,6 +99,9 @@ class DialogueIn(BaseModel):
     text: str
     language: str = "English"
     speaker: str | None = None
+    speaker_subject: int | None = Field(
+        None, description="1-based <Subject N> that owns this line (caller-owned speaker "
+                          "binding; required for multi-person speaker-selection exams).")
     voiceover: bool = False
 
 
@@ -363,7 +366,8 @@ def _to_brief(b: BriefIn) -> Brief:
                  megapixels=b.megapixels,
                  mode=Mode(b.mode) if b.mode else None,
                  dialogue=[DialogueLine(text=d.text, language=d.language,
-                                        speaker_hint=d.speaker, voiceover=d.voiceover)
+                                        speaker_hint=d.speaker, voiceover=d.voiceover,
+                                        speaker_subject=d.speaker_subject)
                            for d in b.dialogue],
                  onscreen_text=list(b.onscreen_text), shots=b.shots, loras=list(b.loras),
                  silent=b.silent, constraints=list(b.constraints), effort=b.effort,
