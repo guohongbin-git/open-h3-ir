@@ -256,7 +256,9 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
                   omit: tuple[str, ...] = (),
                   transcripts: dict[str, str] | None = None,
                   action_anchors: list[dict[str, Any]] | None = None,
-                  scene_text: str | None = None) -> IRDocument:
+                  scene_text: str | None = None,
+                  camera_phrase: dict[str, Any] | None = None,
+                  controlled: bool = False) -> IRDocument:
     cfg = get_config()
     opts = opts or ProfileOptions(name=cfg.profile)
     own_backend = backend is None
@@ -273,6 +275,12 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
         # can wire cannot be improved by looking at them, and analysis is the expensive stage.
         check_request(brief)
         check_capacity(brief)
+        # Controlled-experiment gate: the camera control plane must be caller-owned and
+        # never silently fall back to the draft rotation (CRITICAL for experimental validity).
+        if controlled and camera_phrase is None:
+            raise BriefRefused("camera-phrase-required",
+                               "controlled 模式必须提供 camera_phrase（type/amplitude/speed），"
+                               "否则运镜会悄悄落回 DRAFT_CAMERA 轮换，污染单变量条件。")
         # What the files themselves say, before anything reads a guess instead: pixel dimensions
         # (the row cost and the aspect check are computed from them) and a declared kind that does
         # not match the bytes.
@@ -356,7 +364,8 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
         # --- the product floor: a complete, valid IR with no prose model involved ---------
         t = time.time()
         draft_plan = deterministic_draft(brief, mode, cards, opts=opts, loras=loras,
-                                         mode_decision=decision)
+                                         mode_decision=decision,
+                                         camera_phrase=camera_phrase)
         # Before anything is written or scored: a swap the wiring cannot make unambiguous is a
         # caller error, and the draft plan is the first object that holds the binding to check.
         check_swap(brief, draft_plan)
@@ -424,6 +433,11 @@ def compile_brief(brief: Brief, *, backend: Backend | None = None,
                     "clarification": needs_clarification(decision),
                 })
 
+        if camera_phrase is not None:
+            from .anchors import camera_purity_check
+            bad = camera_purity_check(draft_result.prompt, camera_phrase)
+            if bad:
+                raise CompilerInvariantError("相机控制平面纯度门失败: " + "; ".join(bad))
         if not llm:
             # Arm 0: the deterministic draft IS the deliverable. Rendered above with the
             # caller's action anchors injected; no prose model ever runs.

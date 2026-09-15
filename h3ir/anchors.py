@@ -93,3 +93,50 @@ def inject(plan, anchors_raw: list[dict[str, Any]],
                                          f"<Subject {a['subject']}> {a['event']}.",
                           "preservation": "exact"})
     return spans
+
+# ===== 相机控制平面（总监裁决 2026-09-14：模板越权注入修复） =====
+import re
+
+CAMERA_CANONICAL = [
+    "zooms in", "zooms out", "pushes in", "pulls out", "pans left", "pans right",
+    "trucks left", "trucks right", "tilts up", "tilts down",
+    "rises on a pedestal move", "lowers on a pedestal move",
+    "arcs around the subject", "tracks with the subject", "holds a static shot",
+    "shakes slightly", "shakes strongly", "takes the subject's point of view",
+    "rolls clockwise", "rolls counterclockwise",
+]
+_CAM_ALT = "|".join(re.escape(v) for v in CAMERA_CANONICAL)
+CAM_RE = re.compile(rf"The camera (?P<verb>{_CAM_ALT})(?: with (?P<amp>small|large) amplitude)?"
+                    rf"(?: at (?P<spd>slow|fast) speed)?")
+_VERB2TYPE = {
+    "zooms in": "Zoom In", "zooms out": "Zoom Out", "pushes in": "Push In", "pulls out": "Pull Out",
+    "pans left": "Pan Left", "pans right": "Pan Right", "trucks left": "Truck Left",
+    "trucks right": "Truck Right", "tilts up": "Tilt Up", "tilts down": "Tilt Down",
+    "rises on a pedestal move": "Pedestal Up", "lowers on a pedestal move": "Pedestal Down",
+    "arcs around the subject": "Arc Shot", "tracks with the subject": "Tracking Shot",
+    "holds a static shot": "Static Shot", "shakes slightly": "Shake Slightly",
+    "shakes strongly": "Shake Strongly", "takes the subject's point of view": "POV",
+    "rolls clockwise": "Roll Clockwise", "rolls counterclockwise": "Roll Counterclockwise",
+}
+MOTION_VERBS = [v for v in CAMERA_CANONICAL if v != "holds a static shot"]
+
+
+def camera_purity_check(prompt: str, camera_phrase: dict) -> list[str]:
+    """三不变量 + Static 硬闸。返回违规列表，空=干净。"""
+    found = [{"verb": m.group("verb"), "amp": m.group("amp"), "spd": m.group("spd")}
+             for m in CAM_RE.finditer(prompt)]
+    v = []
+    if len(found) != 1:
+        v.append(f"相机指令数={len(found)}，控制平面要求恰 1 条（双指令=污染）")
+        return v
+    got = found[0]
+    want_type = camera_phrase["type"]
+    if _VERB2TYPE.get(got["verb"]) != want_type:
+        v.append(f"相机指令解析为 {_VERB2TYPE.get(got['verb'])!r}，要求 {want_type!r}")
+    if (got["amp"] or None) != (camera_phrase.get("amplitude") or None):
+        v.append(f"amplitude 解析 {got['amp']!r}，要求 {camera_phrase.get('amplitude')!r}")
+    if (got["spd"] or None) != (camera_phrase.get("speed") or None):
+        v.append(f"speed 解析 {got['spd']!r}，要求 {camera_phrase.get('speed')!r}")
+    if want_type == "Static Shot" and any(mv in prompt for mv in MOTION_VERBS):
+        v.append("Static 语义但文字夹运动动词（语义-文字分裂硬闸）")
+    return v

@@ -181,6 +181,17 @@ class BriefIn(BaseModel):
                     "on the draft_only path (frame-truth anchors and dd semantics ride "
                     "into the render even though the draft template does not restate "
                     "the request).")
+    camera_phrase: dict[str, Any] | None = Field(
+        None,
+        description="Caller-owned camera directive {type, amplitude(small|large|null), "
+                    "speed(slow|fast|null)} from the official closed motion vocabulary. In "
+                    "controlled experiments it REPLACES the draft camera rotation; the "
+                    "purity gate proves the final prompt carries exactly this one directive.")
+    controlled: bool = Field(
+        False,
+        description="Controlled-experiment mode: camera_phrase becomes mandatory and the "
+                    "purity gate is a hard compile failure. Production (False) keeps "
+                    "template rotation when camera_phrase is absent.")
     transcripts: dict[str, str] = Field(
         default_factory=dict,
         description="sha256 -> transcript, for attached audio. This service NEVER transcribes: "
@@ -675,7 +686,9 @@ def create_brief(body: BriefIn) -> JSONResponse:
                             thinking_prose=(body.effort == "max"),
                             transcripts=dict(body.transcripts),
                             action_anchors=body.action_anchors,
-                            scene_text=body.scene_text)
+                            scene_text=body.scene_text,
+                            camera_phrase=body.camera_phrase,
+                            controlled=body.controlled)
     except BriefRefused as e:
         # Every refusal this layer makes about the request itself, with the code it carries. The
         # capacity one is design.md 12's, and 422 rather than a silently truncated manifest: which

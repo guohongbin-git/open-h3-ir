@@ -196,7 +196,7 @@ def draft_shot_body(shot: ShotPlan, subjects: list[SubjectPlan], brief: Brief,
 
 def deterministic_draft(brief: Brief, mode: Mode, cards: dict[str, AssetCard], *,
                         opts: ProfileOptions | None = None, loras=None, mode_decision=None,
-                        licence=None):
+                        licence=None, camera_phrase: dict | None = None):
     """A complete Plan with every prose slot filled and no prose model called."""
     opts = opts or ProfileOptions()
     if licence is None:
@@ -206,7 +206,12 @@ def deterministic_draft(brief: Brief, mode: Mode, cards: dict[str, AssetCard], *
                           mode_decision=mode_decision)
 
     from .creativity import MAGNITUDE, parse
-    rotation = draft_camera(MAGNITUDE[parse(brief.creativity)])
+    # Controlled experiment (director ruling 2026-09-14): the caller's camera_phrase
+    # replaces the rotation wholesale; production (None) keeps the template behavior.
+    if camera_phrase is not None:
+        rotation = [dict(camera_phrase)]
+    else:
+        rotation = draft_camera(MAGNITUDE[parse(brief.creativity)])
 
     beats: list[dict[str, Any]] = []
     for i, _ in enumerate(skeleton.shots):

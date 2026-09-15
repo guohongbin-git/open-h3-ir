@@ -52,7 +52,7 @@ from .shots import PINNED_SHOTS_MAX
 # 2 are interchangeable" -- what it needs to know is whether the particular field, role or limit IT
 # is about to use exists on the other side, and that is answered by comparing the sections, not the
 # number. The number is what a message quotes so two people can say which contract they each have.
-CONTRACT_VERSION = 3
+CONTRACT_VERSION = 4
 
 
 # --------------------------------------------------------------------------- the wire
@@ -97,7 +97,7 @@ ASSET_FIELDS: tuple[str, ...] = (
 BRIEF_FIELDS: tuple[str, ...] = (
     "intent", "assets", "seconds", "aspect", "megapixels", "dialogue", "onscreen_text", "shots",
     "loras", "silent", "constraints", "creativity", "director", "director_profile", "effort",
-    "seed", "transcripts", "answer", "compile_mode", "mode", "action_anchors", "scene_text",
+    "seed", "transcripts", "answer", "compile_mode", "mode", "action_anchors", "scene_text", "camera_phrase", "controlled",
 )
 
 # Every key of one dialogue line, which is `service.DialogueIn`'s field list.
